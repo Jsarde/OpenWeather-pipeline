@@ -1,2 +1,3 @@
 # OpenWeather-pipeline
-ETL pipeline using OpenWeather API
+ETL pipeline with Airflow and AWS
+using OpenWeather API
