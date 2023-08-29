@@ -1,16 +1,59 @@
 from dotenv import load_dotenv
 import os
-import json
 from datetime import datetime,timedelta
+import json
+import pandas as pd
+import boto3
 
 from airflow import DAG
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.providers.http.operators.http import SimpleHttpOperator
+from airflow.operators.python import PythonOperator
+
+
+
+def kelvin_to_fahrenheit(kelvin):
+        fahrenheit = (kelvin - 273.15) * (9/5) + 32
+        return fahrenheit
+
+def transform_load_weather(ti):
+    data = ti.xcom_pull(task_ids="extract_data")
+    info = {
+            "city" : data["name"],
+            "country" : data["sys"]["country"],
+            "lat" : data["coord"]["lat"],
+            "lng" : data["coord"]["lon"],
+            "weather" : data["weather"][0]["description"],
+            "temperature (F°)" : kelvin_to_fahrenheit(data["main"]["temp"]),
+            "humidity" : data["main"]["humidity"],
+            "wind_speed" : data["wind"]["speed"],
+            "cloudiness (%)" : data["clouds"]["all"],
+            "time" : datetime.utcfromtimestamp(data["dt"] + data["timezone"])
+        }
+    df = pd.DataFrame([info])
+    
+    output_name = "milan_weather_" + datetime.now().strftime("%d%m%Y%H%M")
+    bucket = "openweather"
+    
+    csv_buffer = df.to_csv(index=False)
+    response = s3.put_object(Bucket=bucket, Key=output_name, Body=csv_buffer)
+    if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+        print(f"File '{output_name}' caricato correttamente nel bucket S3 '{bucket}'")
+    else:
+        print("Si è verificato un errore durante il caricamento del file CSV")
 
 
 load_dotenv()
-api_key = os.getenv("API_KEY")
+api_key = os.getenv("OPENWEATHER_KEY")
+aws_access_key=os.getenv("AWS_ACCESS_KEY")
+aws_secret_key=os.getenv("AWS_SECRET_KEY")
 
+s3 = boto3.client(
+    "s3",
+    region_name="eu-south-1",
+    aws_access_key_id=aws_access_key,
+    aws_secret_access_key=aws_secret_key
+)
 
 args = {
     "owner":"SjA",
@@ -44,4 +87,9 @@ with dag:
         log_response=True
     )
 
-    openweather_api_sensor >> extract_weather_data
+    transform_load_data = PythonOperator(
+        task_id="transform_load_data",
+        python_callable=transform_load_weather
+    )
+
+    openweather_api_sensor >> extract_weather_data >> transform_load_data
