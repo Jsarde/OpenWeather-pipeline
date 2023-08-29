@@ -1,5 +1,12 @@
+from dotenv import load_dotenv
+import os
 from datetime import datetime,timedelta
 from airflow import DAG
+from airflow.providers.http.sensors.http import HttpSensor
+
+
+load_dotenv()
+api_key = os.getenv("API_KEY")
 
 
 args = {
@@ -19,4 +26,8 @@ dag = DAG(
 )
 
 with dag:
-    pass
+    openweather_api_sensor = HttpSensor(
+        task_id = "is_weather_api_ready",
+        http_conn_id="openweather_api",
+        endpoint=f"/data/2.5/weather?q=Milan&appid={api_key}&units=metrics"
+    )
