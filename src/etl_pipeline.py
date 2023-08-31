@@ -32,20 +32,14 @@ def transform_load_weather(ti):
         }
     df = pd.DataFrame([info])
     
-    output_name = "milan_weather_" + datetime.now().strftime("%d%m%Y%H%M")
-    bucket = "openweather"
-    
+    output_name = "milan_weather_" + datetime.now().strftime("%d%m%Y%H%M") + ".csv"
     csv_buffer = df.to_csv(index=False)
-    response = s3.put_object(Bucket=bucket, Key=output_name, Body=csv_buffer)
-    if response['ResponseMetadata']['HTTPStatusCode'] == 200:
-        print(f"File '{output_name}' caricato correttamente nel bucket S3 '{bucket}'")
-    else:
-        print("Si è verificato un errore durante il caricamento del file CSV")
+    s3.put_object(Bucket="openweather", Key=output_name, Body=csv_buffer)
 
 
 load_dotenv()
 api_key = os.getenv("OPENWEATHER_KEY")
-aws_access_key=os.getenv("AWS_ACCESS_KEY")
+aws_access_key=os.getenv("AWS_KEY_ID")
 aws_secret_key=os.getenv("AWS_SECRET_KEY")
 
 s3 = boto3.client(
