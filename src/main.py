@@ -6,14 +6,16 @@ import pandas as pd
 
 
 class OpenWeather:
-    def __init__(self,city):
+    def __init__(self,city: str) -> None:
         load_dotenv()
         api_key = os.getenv("API_KEY")
         self.url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={api_key}&units=metrics"
-    def __str__(self):
+    
+    def __str__(self) -> str:
         explanation = "This class returns the current weather of a given city using OpenWeather API"
         return explanation
-    def __status(self,resp):
+    
+    def __status(self,resp: requests.Response):
         flag = False
         code = resp.status_code
         if code == 200:
@@ -28,17 +30,19 @@ class OpenWeather:
         else:
             message = f"{code} - other error"
         return flag, message
-    def kelvin_to_fahrenheit(self,kelvin):
+    
+    def __kelvin_to_fahrenheit(self,kelvin: float) -> float:
         fahrenheit = (kelvin - 273.15) * (9/5) + 32
         return fahrenheit
-    def __processing(self,data):
+    
+    def __processing(self,data: dict) -> pd.DataFrame:
         info = {
             "city" : data["name"],
             "country" : data["sys"]["country"],
             "lat" : data["coord"]["lat"],
             "lng" : data["coord"]["lon"],
             "weather" : data["weather"][0]["description"],
-            "temperature (F°)" : self.kelvin_to_fahrenheit(data["main"]["temp"]),
+            "temperature (F°)" : self.__kelvin_to_fahrenheit(data["main"]["temp"]),
             "humidity" : data["main"]["humidity"],
             "wind_speed" : data["wind"]["speed"],
             "cloudiness (%)" : data["clouds"]["all"],
@@ -46,19 +50,24 @@ class OpenWeather:
         }
         tempdf = pd.DataFrame([info])
         return tempdf
+    
     def forecast(self):
-        response = requests.get(self.url)
-        flag, message = self.__status(response)
-        if flag:
-            df = self.__processing(response.json())
-            return df
+        try:
+            response = requests.get(self.url)
+        except Exception as e:
+            print(f"Request error >> {str(e)}")
         else:
-            return message
+            flag, message = self.__status(resp=response)
+            if flag:
+                df = self.__processing(response.json())
+                return df
+            else:
+                return message
+
 
 
 if __name__ == "__main__":
     input_city = input("Insert city's name >>: ")
     weather = OpenWeather(city=input_city)
     result = weather.forecast()
-    
     print(result)

@@ -9,14 +9,15 @@ from airflow import DAG
 from airflow.providers.http.sensors.http import HttpSensor
 from airflow.providers.http.operators.http import SimpleHttpOperator
 from airflow.operators.python import PythonOperator
+from airflow.providers.slack.operators.slack_webhook import SlackWebhookOperator
 
 
 
-def kelvin_to_fahrenheit(kelvin):
+def kelvin_to_fahrenheit(kelvin: float) -> float:
         fahrenheit = (kelvin - 273.15) * (9/5) + 32
         return fahrenheit
 
-def transform_load_weather(ti):
+def transform_load_weather(ti) -> None:
     data = ti.xcom_pull(task_ids="extract_data")
     info = {
             "city" : data["name"],
@@ -31,7 +32,7 @@ def transform_load_weather(ti):
             "time" : datetime.utcfromtimestamp(data["dt"] + data["timezone"])
         }
     df = pd.DataFrame([info])
-    
+    # upload in S3
     output_name = "milan_weather_" + datetime.now().strftime("%d%m%Y%H%M") + ".csv"
     csv_buffer = df.to_csv(index=False)
     s3.put_object(Bucket="openweather", Key=output_name, Body=csv_buffer)
@@ -53,7 +54,10 @@ args = {
     "owner":"SjA",
     "retries":3,
     "retry_delay":timedelta(minutes=15),
-    "depends_on_past":False
+    "depends_on_past":False,
+    "email":["jacoposardellini@gmail.com"],
+    "email_on_failure":False,
+    "email_on_retry":False
 }
 
 dag = DAG(
@@ -86,4 +90,12 @@ with dag:
         python_callable=transform_load_weather
     )
 
-    openweather_api_sensor >> extract_weather_data >> transform_load_data
+    slack_notification_task = SlackWebhookOperator(
+         task_id="slack_notification",
+         slack_webhook_conn_id="slack_conn",
+         channel="#data-engineer",
+         # come message si può anche creare una funzione() che genera delle stringhe personalizzate
+         message="test slack notification"
+    )
+
+    openweather_api_sensor >> extract_weather_data >> transform_load_data >> slack_notification_task
